@@ -762,17 +762,10 @@ bool Jpeg2000JasperReader::write(const QImage &image, int quality)
     qtImage = image;
 
     // MMIR patch
-    if(qtImage.depth() == 24) {
-        qtImage = qtImage.convertToFormat(QImage::Format_RGB32);
+    if(qtImage.format() == QImage::Format_Grayscale8 || qtImage.format() == QImage::Format_Grayscale16) {
+        qtImage = qtImage.convertToFormat(QImage::Format_Indexed8);
     }
-    else if(qtImage.depth() > 32) {
-        if(qtImage.hasAlphaChannel())
-            qtImage = qtImage.convertToFormat(QImage::Format_ARGB32);
-        else
-            qtImage = qtImage.convertToFormat(QImage::Format_RGB32);
-    }
-
-    if(qtImage.depth() == 32) {
+    else if(qtImage.depth() != 8) {
         if(qtImage.hasAlphaChannel() && qtImage.format() != QImage::Format_ARGB32)
             qtImage = qtImage.convertToFormat(QImage::Format_ARGB32);
         if(!qtImage.hasAlphaChannel() && qtImage.format() != QImage::Format_RGB32)
