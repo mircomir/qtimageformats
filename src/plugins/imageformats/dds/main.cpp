@@ -26,9 +26,9 @@ QImageIOPlugin::Capabilities QDDSPlugin::capabilities(QIODevice *device, const Q
     if (format == QByteArrayLiteral("dds"))
         return Capabilities(CanRead | CanWrite);
     if (!format.isEmpty())
-        return 0;
+        return {};
     if (!device || !device->isOpen())
-        return 0;
+        return {};
 
     Capabilities cap;
     if (device->isReadable() && QDDSHandler::canRead(device))
