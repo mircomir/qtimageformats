@@ -574,8 +574,14 @@ bool Jpeg2000JasperReader::read(QImage *pImage)
         qtFormat = hasAlpha ? QImage::Format_ARGB32 : QImage::Format_RGB32;
     else if (jasperColorspaceFamily == JAS_CLRSPC_FAM_GRAY)
         qtFormat = hasAlpha ? QImage::Format_ARGB32 : QImage::Format_Grayscale8;
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    qtImage = QImage(QSize(qtWidth, qtHeight), qtFormat);
+    if(qtImage.isNull())
+        return false;
+#else
     if (!QImageIOHandler::allocateImage(QSize(qtWidth, qtHeight), qtFormat, &qtImage))
         return false;
+#endif
 
     // Copy data
     if (oddComponentSubsampling) {

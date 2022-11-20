@@ -225,6 +225,26 @@ static const FormatName formatNames[] = {
 };
 static const size_t formatNamesSize = sizeof(formatNames)/sizeof(FormatName);
 
+// On Qt 6 to make the plugins fail to allocate if the image size is greater than QImageReader::allocationLimit()
+// it is necessary to allocate the image with QImageIOHandler::allocateImage().
+static inline QImage imageAlloc(const QSize &size, const QImage::Format &format)
+{
+    QImage img;
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    img = QImage(size, format);
+#else
+    if (!QImageIOHandler::allocateImage(size, format, &img)) {
+        img = QImage(); // paranoia
+    }
+#endif
+    return img;
+}
+
+static inline QImage imageAlloc(qint32 width, qint32 height, const QImage::Format &format)
+{
+    return imageAlloc(QSize(width, height), format);
+}
+
 static inline int maskToShift(quint32 mask)
 {
     if (mask == 0)
@@ -468,7 +488,7 @@ static QImage readDXT(QDataStream &s, quint32 width, quint32 height)
     QImage::Format format = (version == Two || version == Four) ?
                 QImage::Format_ARGB32_Premultiplied : QImage::Format_ARGB32;
 
-    QImage image(width, height, format);
+    QImage image = imageAlloc(width, height, format);
 
     for (quint32 i = 0; i < height; i += 4) {
         for (quint32 j = 0; j < width; j += 4) {
@@ -535,7 +555,7 @@ static inline QImage readRXGB(QDataStream &s, quint32 width, quint32 height)
 
 static QImage readATI2(QDataStream &s, quint32 width, quint32 height)
 {
-    QImage image(width, height, QImage::Format_RGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_RGB32);
 
     for (quint32 i = 0; i < height; i += 4) {
         for (quint32 j = 0; j < width; j += 4) {
@@ -592,7 +612,7 @@ static QImage readUnsignedImage(QDataStream &s, const DDSHeader &dds, quint32 wi
 
     const QImage::Format format = hasAlpha ? QImage::Format_ARGB32 : QImage::Format_RGB32;
 
-    QImage image(width, height, format);
+    QImage image = imageAlloc(width, height, format);
 
     for (quint32 y = 0; y < height; y++) {
         for (quint32 x = 0; x < width; x++) {
@@ -656,7 +676,7 @@ static inline float readFloat32(QDataStream &s)
 
 static QImage readR16F(QDataStream &s, const quint32 width, const quint32 height)
 {
-    QImage image(width, height, QImage::Format_RGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_RGB32);
 
     for (quint32 y = 0; y < height; y++) {
         QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
@@ -671,7 +691,7 @@ static QImage readR16F(QDataStream &s, const quint32 width, const quint32 height
 
 static QImage readRG16F(QDataStream &s, const quint32 width, const quint32 height)
 {
-    QImage image(width, height, QImage::Format_RGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_RGB32);
 
     for (quint32 y = 0; y < height; y++) {
         QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
@@ -687,7 +707,7 @@ static QImage readRG16F(QDataStream &s, const quint32 width, const quint32 heigh
 
 static QImage readARGB16F(QDataStream &s, const quint32 width, const quint32 height)
 {
-    QImage image(width, height, QImage::Format_ARGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_ARGB32);
 
     for (quint32 y = 0; y < height; y++) {
         QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
@@ -705,7 +725,7 @@ static QImage readARGB16F(QDataStream &s, const quint32 width, const quint32 hei
 
 static QImage readR32F(QDataStream &s, const quint32 width, const quint32 height)
 {
-    QImage image(width, height, QImage::Format_RGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_RGB32);
 
     for (quint32 y = 0; y < height; y++) {
         QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
@@ -720,7 +740,7 @@ static QImage readR32F(QDataStream &s, const quint32 width, const quint32 height
 
 static QImage readRG32F(QDataStream &s, const quint32 width, const quint32 height)
 {
-    QImage image(width, height, QImage::Format_RGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_RGB32);
 
     for (quint32 y = 0; y < height; y++) {
         QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
@@ -736,7 +756,7 @@ static QImage readRG32F(QDataStream &s, const quint32 width, const quint32 heigh
 
 static QImage readARGB32F(QDataStream &s, const quint32 width, const quint32 height)
 {
-    QImage image(width, height, QImage::Format_ARGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_ARGB32);
 
     for (quint32 y = 0; y < height; y++) {
         QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
@@ -753,7 +773,7 @@ static QImage readARGB32F(QDataStream &s, const quint32 width, const quint32 hei
 
 static QImage readQ16W16V16U16(QDataStream &s, const quint32 width, const quint32 height)
 {
-    QImage image(width, height, QImage::Format_ARGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_ARGB32);
 
     quint8 colors[ColorCount];
     qint16 tmp;
@@ -773,7 +793,7 @@ static QImage readQ16W16V16U16(QDataStream &s, const quint32 width, const quint3
 
 static QImage readCxV8U8(QDataStream &s, const quint32 width, const quint32 height)
 {
-    QImage image(width, height, QImage::Format_RGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_RGB32);
 
     for (quint32 y = 0; y < height; y++) {
         QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
@@ -794,7 +814,7 @@ static QImage readCxV8U8(QDataStream &s, const quint32 width, const quint32 heig
 
 static QImage readPalette8Image(QDataStream &s, quint32 width, quint32 height)
 {
-    QImage image(width, height, QImage::Format_Indexed8);
+    QImage image = imageAlloc(width, height, QImage::Format_Indexed8);
     for (int i = 0; i < 256; ++i) {
         quint8 r, g, b, a;
         s >> r >> g >> b >> a;
@@ -814,7 +834,7 @@ static QImage readPalette8Image(QDataStream &s, quint32 width, quint32 height)
 
 static QImage readPalette4Image(QDataStream &s, quint32 width, quint32 height)
 {
-    QImage image(width, height, QImage::Format_Indexed8);
+    QImage image = imageAlloc(width, height, QImage::Format_Indexed8);
     for (int i = 0; i < 16; ++i) {
         quint8 r, g, b, a;
         s >> r >> g >> b >> a;
@@ -839,7 +859,7 @@ static QImage readPalette4Image(QDataStream &s, quint32 width, quint32 height)
 
 static QImage readARGB16(QDataStream &s, quint32 width, quint32 height)
 {
-    QImage image(width, height, QImage::Format_ARGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_ARGB32);
 
     for (quint32 y = 0; y < height; y++) {
         QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
@@ -859,7 +879,7 @@ static QImage readARGB16(QDataStream &s, quint32 width, quint32 height)
 
 static QImage readV8U8(QDataStream &s, quint32 width, quint32 height)
 {
-    QImage image(width, height, QImage::Format_RGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_RGB32);
 
     for (quint32 y = 0; y < height; y++) {
         QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
@@ -875,7 +895,7 @@ static QImage readV8U8(QDataStream &s, quint32 width, quint32 height)
 
 static QImage readL6V5U5(QDataStream &s, quint32 width, quint32 height)
 {
-    QImage image(width, height, QImage::Format_ARGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_ARGB32);
 
     quint16 tmp;
     for (quint32 y = 0; y < height; y++) {
@@ -893,7 +913,7 @@ static QImage readL6V5U5(QDataStream &s, quint32 width, quint32 height)
 
 static QImage readX8L8V8U8(QDataStream &s, quint32 width, quint32 height)
 {
-    QImage image(width, height, QImage::Format_ARGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_ARGB32);
 
     quint8 a, l;
     qint8 v, u;
@@ -910,7 +930,7 @@ static QImage readX8L8V8U8(QDataStream &s, quint32 width, quint32 height)
 
 static QImage readQ8W8V8U8(QDataStream &s, quint32 width, quint32 height)
 {
-    QImage image(width, height, QImage::Format_ARGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_ARGB32);
 
     quint8 colors[ColorCount];
     qint8 tmp;
@@ -930,7 +950,7 @@ static QImage readQ8W8V8U8(QDataStream &s, quint32 width, quint32 height)
 
 static QImage readV16U16(QDataStream &s, quint32 width, quint32 height)
 {
-    QImage image(width, height, QImage::Format_RGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_RGB32);
 
     for (quint32 y = 0; y < height; y++) {
         QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
@@ -948,7 +968,7 @@ static QImage readV16U16(QDataStream &s, quint32 width, quint32 height)
 
 static QImage readA2W10V10U10(QDataStream &s, quint32 width, quint32 height)
 {
-    QImage image(width, height, QImage::Format_ARGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_ARGB32);
 
     quint32 tmp;
     for (quint32 y = 0; y < height; y++) {
@@ -970,7 +990,7 @@ static QImage readA2W10V10U10(QDataStream &s, quint32 width, quint32 height)
 
 static QImage readUYVY(QDataStream &s, quint32 width, quint32 height)
 {
-    QImage image(width, height, QImage::Format_RGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_RGB32);
 
     quint8 uyvy[4];
     for (quint32 y = 0; y < height; y++) {
@@ -991,7 +1011,7 @@ static QImage readUYVY(QDataStream &s, quint32 width, quint32 height)
 
 static QImage readR8G8B8G8(QDataStream &s, quint32 width, quint32 height)
 {
-    QImage image(width, height, QImage::Format_RGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_RGB32);
     quint8 rgbg[4];
     for (quint32 y = 0; y < height; y++) {
         QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
@@ -1011,7 +1031,7 @@ static QImage readR8G8B8G8(QDataStream &s, quint32 width, quint32 height)
 
 static QImage readYUY2(QDataStream &s, quint32 width, quint32 height)
 {
-    QImage image(width, height, QImage::Format_RGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_RGB32);
 
     quint8 yuyv[4];
     for (quint32 y = 0; y < height; y++) {
@@ -1032,7 +1052,7 @@ static QImage readYUY2(QDataStream &s, quint32 width, quint32 height)
 
 static QImage readG8R8G8B8(QDataStream &s, quint32 width, quint32 height)
 {
-    QImage image(width, height, QImage::Format_RGB32);
+    QImage image = imageAlloc(width, height, QImage::Format_RGB32);
     quint8 grgb[4];
     for (quint32 y = 0; y < height; y++) {
         QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
@@ -1291,7 +1311,7 @@ static qint64 mipmapOffset(const DDSHeader &dds, const int format, const int lev
 static QImage readCubeMap(QDataStream &s, const DDSHeader &dds, const int fmt)
 {
     QImage::Format format = hasAlpha(dds) ? QImage::Format_ARGB32 : QImage::Format_RGB32;
-    QImage image(4 * dds.width, 3 * dds.height, format);
+    QImage image = imageAlloc(4 * dds.width, 3 * dds.height, format);
 
     image.fill(0);
 
