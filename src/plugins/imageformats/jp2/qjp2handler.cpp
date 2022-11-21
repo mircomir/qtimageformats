@@ -885,12 +885,14 @@ bool Jpeg2000JasperReader::write(const QImage &image, int quality)
     // here..
     char *buffer = reinterpret_cast<char *>(reinterpret_cast<jas_stream_memobj_t*>(memory_stream->obj_)->buf_);
     qint64 length = jas_stream_length(memory_stream);
-    ioDevice->write(buffer, length);
+    auto ok = ioDevice->write(buffer, length) == length;
+    if(!ok)
+        qDebug() << "Jpeg2000JasperReader::write: error while writing the data on device!";
 
     jas_stream_close(memory_stream);
     jas_image_destroy(jasper_image);
 
-    return true;
+    return ok;
 }
 
 /*!
