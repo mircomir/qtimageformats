@@ -310,7 +310,7 @@ Jpeg2000JasperReader::Jpeg2000JasperReader(QIODevice *iod, SubFormat format)
         jas_conf_set_max_mem_usage(qsizetype(QImageReader::allocationLimit()) * 1024 * 1024);
 #else
     // 128MB seems to be enough.
-    jas_conf_set_max_mem_usage(128 * 1024 * 1024);
+    jas_conf_set_max_mem_usage(256 * 1024 * 1024);
 #endif
     if (jas_init_library()) {
         jasperOk = false;
@@ -873,23 +873,30 @@ bool Jpeg2000JasperReader::write(const QImage &image, int quality)
     // Open an empty jasper stream that grows automatically
     jas_stream_t * memory_stream = jas_stream_memopen(0, 0);
 
+    auto ok = true;
+
     // Jasper wants a non-const string.
     char *str = qstrdup(jasperFormatString.toLatin1().constData());
-    jas_image_encode(jasper_image, memory_stream, fmtid, str);
+    if (jas_image_encode(jasper_image, memory_stream, fmtid, str) < 0)
+        ok = false;
     delete[] str;
-    jas_stream_flush(memory_stream);
+    if (jas_stream_flush(memory_stream) != 0)
+        ok = false;
 
-    // jas_stream_t::obj_ is a void* which points to the stream implementation,
-    // e.g a file stream or a memory stream. But in our case we know that it is
-    // a memory stream since we created the object, so we just reiterpret_cast
-    // here..
-    char *buffer = reinterpret_cast<char *>(reinterpret_cast<jas_stream_memobj_t*>(memory_stream->obj_)->buf_);
-    qint64 length = jas_stream_length(memory_stream);
-    auto ok = ioDevice->write(buffer, length) == length;
-    if(!ok)
-        qDebug() << "Jpeg2000JasperReader::write: error while writing the data on device!";
+    if (ok) {
+        // jas_stream_t::obj_ is a void* which points to the stream implementation,
+        // e.g a file stream or a memory stream. But in our case we know that it is
+        // a memory stream since we created the object, so we just reiterpret_cast
+        // here..
+        auto buffer = reinterpret_cast<char *>(reinterpret_cast<jas_stream_memobj_t*>(memory_stream->obj_)->buf_);
+        auto length = jas_stream_length(memory_stream);
+        ok = ioDevice->write(buffer, length) == length;
+        if (!ok)
+            qDebug() << "Jpeg2000JasperReader::write: error while writing the data on device!";
+    }
 
-    jas_stream_close(memory_stream);
+    if (jas_stream_close(memory_stream) != 0)
+        ok = false;
     jas_image_destroy(jasper_image);
 
     return ok;
