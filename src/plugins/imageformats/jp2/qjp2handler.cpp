@@ -12,6 +12,17 @@
 #include <jasper/jasper.h>
 #include <math.h> // for pow
 
+// CMYK support
+#ifndef JAS_CLRSPC_FAM_CMYK
+#   define JAS_CLRSPC_FAM_CMYK 64
+#endif
+
+#if QT_VERSION < QT_VERSION_CHECK(6, 8, 0)
+#   define NATIVE_CMYK 0
+#else
+#   define NATIVE_CMYK 1
+#endif
+
 QT_BEGIN_NAMESPACE
 
 class QJp2HandlerPrivate
@@ -58,6 +69,7 @@ private:
     void copyScanlineJasperQtRGBA(jas_seqent_t ** const jasperRow, uchar *qtScanLine);
     void copyScanlineJasperQtGray(jas_seqent_t ** const jasperRow, uchar *qtScanLine);
     void copyScanlineJasperQtGrayA(jas_seqent_t ** const jasperRow, uchar *qtScanLine);
+    void copyScanlineJasperQtCMYK(jas_seqent_t ** const jasperRow, uchar *qtScanLine);
 
     void copyQtJasper(const ScanlineFuncWrite scanlinecopier);
     void copyScanlineQtJasperRGB(jas_matrix_t ** jasperRow, uchar *qtScanLine);
@@ -385,7 +397,8 @@ bool Jpeg2000JasperReader::read(QImage *pImage)
 
     bool needColorspaceChange = false;
     if (jasperColorspaceFamily != JAS_CLRSPC_FAM_RGB &&
-        jasperColorspaceFamily != JAS_CLRSPC_FAM_GRAY)
+        jasperColorspaceFamily != JAS_CLRSPC_FAM_GRAY &&
+        jasperColorspaceFamily != JAS_CLRSPC_FAM_CMYK)
         needColorspaceChange = true;
 
     // Get per-component data
@@ -433,11 +446,19 @@ bool Jpeg2000JasperReader::read(QImage *pImage)
         jasComponentPrecicion[c] = jas_image_cmptprec(jasper_image, c);
     }
 
+#if NATIVE_CMYK
     if (jasperColorspaceFamily != JAS_CLRSPC_FAM_RGB &&
+        jasperColorspaceFamily != JAS_CLRSPC_FAM_CMYK &&
         jasperColorspaceFamily != JAS_CLRSPC_FAM_GRAY) {
+        qDebug("The Qt JPEG 2000 reader was unable to convert colorspace to RGB, CMYK or grayscale");
+        return false;
+    }
+#else
+    if (jasperColorspaceFamily != JAS_CLRSPC_FAM_RGB && jasperColorspaceFamily != JAS_CLRSPC_FAM_GRAY) {
         qDebug("The Qt JPEG 2000 reader was unable to convert colorspace to RGB or grayscale");
         return false;
     }
+#endif
 
     // If a component has a subsampling factor != 1, we can't trust
     // jas_image_height/width, so we need to figure it out ourselves
@@ -538,6 +559,17 @@ bool Jpeg2000JasperReader::read(QImage *pImage)
         colorComponentMapping[0] = jas_image_getcmptbytype(jasper_image,
                                     JAS_IMAGE_CT_COLOR(JAS_IMAGE_CT_GRAY_Y));
         qtNumComponents = 1;
+    } else if (jasperColorspaceFamily == JAS_CLRSPC_FAM_CMYK) {
+        if (jasNumComponents != 4)
+            qDebug("JPEG 2000 reader expected 4 components, got %d",
+                   jasNumComponents);
+
+        // Set up mapping from C,M,Y,K -> component num.
+        colorComponentMapping[0] = jas_image_getcmptbytype(jasper_image, 0);
+        colorComponentMapping[1] = jas_image_getcmptbytype(jasper_image, 1);
+        colorComponentMapping[2] = jas_image_getcmptbytype(jasper_image, 2);
+        colorComponentMapping[3] = jas_image_getcmptbytype(jasper_image, 3);
+        qtNumComponents = 4;
     } else {
         printColorSpaceError();
         return false;
@@ -574,6 +606,10 @@ bool Jpeg2000JasperReader::read(QImage *pImage)
         qtFormat = hasAlpha ? QImage::Format_ARGB32 : QImage::Format_RGB32;
     else if (jasperColorspaceFamily == JAS_CLRSPC_FAM_GRAY)
         qtFormat = hasAlpha ? QImage::Format_ARGB32 : QImage::Format_Grayscale8;
+#if NATIVE_CMYK
+    else if (jasperColorspaceFamily == JAS_CLRSPC_FAM_CMYK)
+        qtFormat = QImage::QImage::Format_CMYK8888;
+#endif
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     qtImage = QImage(QSize(qtWidth, qtHeight), qtFormat);
     if(qtImage.isNull())
@@ -598,6 +634,8 @@ bool Jpeg2000JasperReader::read(QImage *pImage)
             copyJasperQt(&Jpeg2000JasperReader::copyScanlineJasperQtGrayA);
         else
             copyJasperQt(&Jpeg2000JasperReader::copyScanlineJasperQtGray);
+    } else if (jasperColorspaceFamily == JAS_CLRSPC_FAM_CMYK) {
+        copyJasperQt(&Jpeg2000JasperReader::copyScanlineJasperQtCMYK);
     }
     if (decodeOk)
         *pImage = qtImage;
@@ -752,6 +790,22 @@ void Jpeg2000JasperReader::copyScanlineJasperQtGrayA(jas_seqent_t ** const jaspe
                       jasperRow[0][c];
     }
 }
+
+/*!
+    \internal
+    Copies CMYK data from Jasper to a 32-bit QImage.
+*/
+void Jpeg2000JasperReader::copyScanlineJasperQtCMYK(jas_seqent_t ** const jasperRow,  uchar *qtScanLine)
+{
+    QRgb *scanLine = reinterpret_cast<QRgb *>(qtScanLine);
+    for (int c = 0; c < qtWidth; ++c) {
+        *scanLine++ = (jasperRow[3][c] << 24) |
+                      (jasperRow[2][c] << 16) |
+                      (jasperRow[1][c] << 8) |
+                      jasperRow[0][c];
+    }
+}
+
 
 /*!
     Opens the file data and attempts to decode it using the Jasper library.
