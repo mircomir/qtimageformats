@@ -608,7 +608,7 @@ bool Jpeg2000JasperReader::read(QImage *pImage)
         qtFormat = hasAlpha ? QImage::Format_ARGB32 : QImage::Format_Grayscale8;
 #if NATIVE_CMYK
     else if (jasperColorspaceFamily == JAS_CLRSPC_FAM_CMYK)
-        qtFormat = QImage::QImage::Format_CMYK8888;
+        qtFormat = QImage::Format_CMYK8888;
 #endif
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     qtImage = QImage(QSize(qtWidth, qtHeight), qtFormat);
