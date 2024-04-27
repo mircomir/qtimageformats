@@ -9,6 +9,10 @@
 #include "qcolor.h"
 #include "qimagereader.h"
 
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+#   include <QColorSpace>
+#endif
+
 #include <jasper/jasper.h>
 #include <math.h> // for pow
 
@@ -88,6 +92,10 @@ private:
     jas_image_t *newGrayscaleImage(const int width, const int height, bool alpha);
     bool decodeColorSpace(int clrspc, QString &family, QString &specific);
     void printMetadata(jas_image_t *image);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    QColorSpace jasperProfToQColorSpace(jas_cmprof_t *cmprof);
+    jas_cmprof_t *qColorSpaceToJasperProf(const QColorSpace& cs);
+#endif
 
     bool jasperOk;
 
@@ -637,8 +645,13 @@ bool Jpeg2000JasperReader::read(QImage *pImage)
     } else if (jasperColorspaceFamily == JAS_CLRSPC_FAM_CMYK) {
         copyJasperQt(&Jpeg2000JasperReader::copyScanlineJasperQtCMYK);
     }
-    if (decodeOk)
+
+    if (decodeOk) {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+        qtImage.setColorSpace(jasperProfToQColorSpace(jasper_image->cmprof_));
+#endif
         *pImage = qtImage;
+    }
 
     return decodeOk;
 }
@@ -883,6 +896,12 @@ bool Jpeg2000JasperReader::write(const QImage &image, int quality)
     else /* if (format == J2cFormat) */
         // JasPer refers to the code stream format as jpc
         fmtid = jas_image_strtofmt(const_cast<char*>("jpc"));
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    if (jasper_image) {
+        jas_image_setcmprof(jasper_image, qColorSpaceToJasperProf(qtImage.colorSpace()));
+    }
+#endif
 
     const int minQuality = 0;
     const int maxQuality = 100;
@@ -1293,5 +1312,47 @@ void Jpeg2000JasperReader::printMetadata(jas_image_t *image)
     Q_UNUSED(image);
 #endif
 }
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+QColorSpace Jpeg2000JasperReader::jasperProfToQColorSpace(jas_cmprof_t *cmprof)
+{
+    QColorSpace cs;
+    if (cmprof == nullptr || cmprof->iccprof == nullptr) {
+        return cs;
+    }
+    auto stream = jas_stream_memopen(NULL, 0);
+    if (stream == nullptr) {
+        return cs;
+    }
+    if (jas_iccprof_save(cmprof->iccprof, stream)) {
+        jas_stream_close(stream);
+        return cs;
+    }
+    jas_stream_flush(stream);
+    QByteArray ba(jas_stream_tell(stream), 0);
+    jas_stream_seek(stream, 0, SEEK_SET);
+    if (jas_stream_read(stream, ba.data(), ba.size()) == ba.size()) {
+        cs = QColorSpace::fromIccProfile(ba);
+    }
+    jas_stream_close(stream);
+    return cs;
+}
+
+jas_cmprof_t *Jpeg2000JasperReader::qColorSpaceToJasperProf(const QColorSpace& cs)
+{
+    jas_cmprof_t *prof = nullptr;
+    if (!cs.isValid())
+        return prof;
+    auto ba = cs.iccProfile();
+    if (auto stream = jas_stream_memopen(ba.data(), ba.size())) {
+        if (auto icc = jas_iccprof_load(stream)) {
+            prof = jas_cmprof_createfromiccprof(icc);
+            jas_iccprof_destroy(icc);
+        }
+        jas_stream_close(stream);
+    }
+    return prof;
+}
+#endif
 
 QT_END_NAMESPACE
