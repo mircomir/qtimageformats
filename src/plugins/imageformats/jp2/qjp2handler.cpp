@@ -620,7 +620,7 @@ bool Jpeg2000JasperReader::read(QImage *pImage)
 #endif
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     qtImage = QImage(QSize(qtWidth, qtHeight), qtFormat);
-    if(qtImage.isNull())
+    if (qtImage.isNull())
         return false;
 #else
     if (!QImageIOHandler::allocateImage(QSize(qtWidth, qtHeight), qtFormat, &qtImage))
@@ -837,17 +837,23 @@ bool Jpeg2000JasperReader::write(const QImage &image, int quality)
     qtImage = image;
 
     // MMIR patch
-    if(qtImage.format() == QImage::Format_Mono ||
-       qtImage.format() == QImage::Format_MonoLSB ||
-       qtImage.format() == QImage::Format_Alpha8 ||
-       qtImage.format() == QImage::Format_Grayscale8 ||
-       qtImage.format() == QImage::Format_Grayscale16) {
-        qtImage = qtImage.convertToFormat(QImage::Format_Indexed8);
+    if (qtImage.format() == QImage::Format_Mono ||
+        qtImage.format() == QImage::Format_MonoLSB ||
+        qtImage.format() == QImage::Format_Alpha8 ||
+        qtImage.format() == QImage::Format_Grayscale8 ||
+        qtImage.format() == QImage::Format_Grayscale16) {
+            qtImage = qtImage.convertToFormat(QImage::Format_Indexed8);
     }
-    else if(qtImage.depth() != 8) {
-        if(qtImage.hasAlphaChannel() && qtImage.format() != QImage::Format_ARGB32)
+    else if (qtImage.depth() != 8) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+        // TODO: add CMYK write support
+        if (qtImage.format() == QImage::Format_CMYK8888) {
+            qtImage.convertToColorSpace(QColorSpace(QColorSpace::SRgb));
+        }
+#endif
+        if (qtImage.hasAlphaChannel() && qtImage.format() != QImage::Format_ARGB32)
             qtImage = qtImage.convertToFormat(QImage::Format_ARGB32);
-        if(!qtImage.hasAlphaChannel() && qtImage.format() != QImage::Format_RGB32)
+        if (!qtImage.hasAlphaChannel() && qtImage.format() != QImage::Format_RGB32)
             qtImage = qtImage.convertToFormat(QImage::Format_RGB32);
     }
     // !MMIR patch
@@ -978,7 +984,7 @@ bool Jpeg2000JasperReader::write(const QImage &image, int quality)
         auto length = jas_stream_length(memory_stream);
         ok = ioDevice->write(buffer, length) == length;
         if (!ok)
-            qDebug() << "Jpeg2000JasperReader::write: error while writing the data on device!";
+            qDebug() << "Error while writing the data on device!";
     }
 
     if (jas_stream_close(memory_stream) != 0)
