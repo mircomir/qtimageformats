@@ -648,7 +648,9 @@ bool Jpeg2000JasperReader::read(QImage *pImage)
 
     if (decodeOk) {
 #if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
-        qtImage.setColorSpace(jasperProfToQColorSpace(jasper_image->cmprof_));
+        qtImage.setColorSpace(jasperProfToQColorSpace(jas_image_cmprof(jasper_image)));
+        if (!qtImage.colorSpace().isValid() && jas_image_cmprof(jasper_image))
+            qDebug() << "Error when converting ICC profile to QColorSpace";
 #endif
         *pImage = qtImage;
     }
@@ -898,9 +900,20 @@ bool Jpeg2000JasperReader::write(const QImage &image, int quality)
         fmtid = jas_image_strtofmt(const_cast<char*>("jpc"));
 
 #if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
-    if (jasper_image) {
-        jas_image_setcmprof(jasper_image, qColorSpaceToJasperProf(qtImage.colorSpace()));
+    if (jas_image_setcmprof(jasper_image, qColorSpaceToJasperProf(qtImage.colorSpace()))) {
+        switch (jas_clrspc_fam(jas_image_clrspc(jasper_image))) {
+        case JAS_CLRSPC_FAM_RGB:
+            jas_image_setclrspc(jasper_image, JAS_CLRSPC_GENRGB);
+            break;
+        case JAS_CLRSPC_FAM_GRAY:
+            jas_image_setclrspc(jasper_image, JAS_CLRSPC_GENGRAY);
+            break;
+        default:
+            break;
+        }
     }
+    if (qtImage.colorSpace().isValid() && jas_image_cmprof(jasper_image) == nullptr)
+        qDebug() << "Error when converting QColorSpace";
 #endif
 
     const int minQuality = 0;
