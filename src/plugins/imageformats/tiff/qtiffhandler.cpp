@@ -649,7 +649,11 @@ bool QTiffHandler::write(const QImage &image)
     if (!device()->isWritable())
         return false;
 
-    TIFF *const tiff = d->openInternal("wB", device());
+    QString mode("wB");
+    if (image.sizeInBytes() > 4000000000)
+        mode = QStringLiteral("w8");
+
+    TIFF *const tiff = d->openInternal(mode.toLatin1().constData(), device());
     if (!tiff)
         return false;
 
