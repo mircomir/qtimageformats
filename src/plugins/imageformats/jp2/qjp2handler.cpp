@@ -19,6 +19,8 @@
 // CMYK support
 #ifndef JAS_CLRSPC_FAM_CMYK
 #   define JAS_CLRSPC_FAM_CMYK 64
+#   define JAS_CLRSPC_GENCMYK jas_clrspc_create(JAS_CLRSPC_FAM_CMYK, 0)
+#   define JAS_ENABLE_CMYK_WRITE 0 // CMYK writing not supported by JasPer
 #endif
 
 #if QT_VERSION < QT_VERSION_CHECK(6, 8, 0)
@@ -82,6 +84,7 @@ private:
     void copyScanlineQtJasperColormapRGBA(jas_matrix_t ** jasperRow, uchar *qtScanLine);
     void copyScanlineQtJasperColormapGrayscale(jas_matrix_t ** jasperRow, uchar *qtScanLine);
     void copyScanlineQtJasperColormapGrayscaleA(jas_matrix_t ** jasperRow, uchar *qtScanLine);
+    void copyScanlineQtJasperCMYK(jas_matrix_t ** jasperRow, uchar *qtScanLine);
 
     bool attemptColorspaceChange(int wantedColorSpace);
     bool createJasperMatrix(jas_matrix_t **&matrix);
@@ -89,6 +92,7 @@ private:
     void printColorSpaceError();
     jas_image_cmptparm_t createComponentMetadata(const int width, const int height);
     jas_image_t *newRGBAImage(const int width, const int height, bool alpha);
+    jas_image_t *newCMYKImage(const int width, const int height, bool alpha);
     jas_image_t *newGrayscaleImage(const int width, const int height, bool alpha);
     bool decodeColorSpace(int clrspc, QString &family, QString &specific);
     void printMetadata(jas_image_t *image);
@@ -835,6 +839,7 @@ bool Jpeg2000JasperReader::write(const QImage &image, int quality)
         return false;
 
     qtImage = image;
+    qDebug() << qtImage.format();
 
     // MMIR patch
     if (qtImage.format() == QImage::Format_Mono ||
@@ -844,12 +849,14 @@ bool Jpeg2000JasperReader::write(const QImage &image, int quality)
         qtImage.format() == QImage::Format_Grayscale16) {
             qtImage = qtImage.convertToFormat(QImage::Format_Indexed8);
     }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0) && JAS_ENABLE_CMYK_WRITE
+    else if (qtImage.depth() != 8 && qtImage.format() != QImage::Format_CMYK8888) {
+#else
     else if (qtImage.depth() != 8) {
-#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
-        // TODO: add CMYK write support
-        if (qtImage.format() == QImage::Format_CMYK8888) {
+#   if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0) && !JAS_ENABLE_CMYK_WRITE
+        if (qtImage.format() == QImage::Format_CMYK8888)
             qtImage.convertToColorSpace(QColorSpace(QColorSpace::SRgb));
-        }
+#   endif
 #endif
         if (qtImage.hasAlphaChannel() && qtImage.format() != QImage::Format_ARGB32)
             qtImage = qtImage.convertToFormat(QImage::Format_ARGB32);
@@ -862,7 +869,18 @@ bool Jpeg2000JasperReader::write(const QImage &image, int quality)
     qtWidth = qtImage.width();
     qtDepth = qtImage.depth();
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+    if (qtDepth == 32 && qtImage.format() == QImage::Format_CMYK8888) { // CMYK
+        jasper_image = newCMYKImage(qtWidth, qtHeight, qtImage.hasAlphaChannel());
+        if (!jasper_image)
+            return false;
+
+        copyQtJasper(&Jpeg2000JasperReader::copyScanlineQtJasperCMYK);
+    }
+    else if (qtDepth == 32) { // RGB(A)
+#else
     if (qtDepth == 32) { // RGB(A)
+#endif
         jasper_image = newRGBAImage(qtWidth, qtHeight, qtImage.hasAlphaChannel());
         if (!jasper_image)
             return false;
@@ -914,13 +932,18 @@ bool Jpeg2000JasperReader::write(const QImage &image, int quality)
         case JAS_CLRSPC_FAM_GRAY:
             jas_image_setclrspc(jasper_image, JAS_CLRSPC_GENGRAY);
             break;
+#   if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+        case JAS_CLRSPC_FAM_CMYK:
+            jas_image_setclrspc(jasper_image, JAS_CLRSPC_GENCMYK);
+            break;
+#   endif // !Qt 6.8
         default:
             break;
         }
     }
     if (qtImage.colorSpace().isValid() && jas_image_cmprof(jasper_image) == nullptr)
         qDebug() << "Error when converting QColorSpace";
-#endif
+#endif // !Qt 5.14
 
     const int minQuality = 0;
     const int maxQuality = 100;
@@ -1043,6 +1066,19 @@ void Jpeg2000JasperReader::copyScanlineQtJasperRGBA(jas_matrix_t ** jasperRow,
         jas_matrix_set(jasperRow[0], 0, col, (*scanLineBuffer & 0x00FF0000) >> 16);
         jas_matrix_set(jasperRow[1], 0, col, (*scanLineBuffer & 0x0000FF00) >> 8);
         jas_matrix_set(jasperRow[2], 0, col, *scanLineBuffer & 0x000000FF);
+        ++scanLineBuffer;
+    }
+}
+
+void Jpeg2000JasperReader::copyScanlineQtJasperCMYK(jas_matrix_t ** jasperRow,
+                                                    uchar *qtScanLine)
+{
+    QRgb *scanLineBuffer = reinterpret_cast<QRgb *>(qtScanLine);
+    for (int col = 0; col < qtWidth; ++col) {
+        jas_matrix_set(jasperRow[3], 0, col, (*scanLineBuffer & 0xFF000000) >> 24);
+        jas_matrix_set(jasperRow[2], 0, col, (*scanLineBuffer & 0x00FF0000) >> 16);
+        jas_matrix_set(jasperRow[1], 0, col, (*scanLineBuffer & 0x0000FF00) >> 8);
+        jas_matrix_set(jasperRow[0], 0, col, *scanLineBuffer & 0x000000FF);
         ++scanLineBuffer;
     }
 }
@@ -1186,6 +1222,36 @@ jas_image_t* Jpeg2000JasperReader::newRGBAImage(const int width,
     */
     if (alpha)
         jas_image_setcmpttype(newImage, 3, JAS_IMAGE_CT_OPACITY);
+    delete[] params;
+    return newImage;
+}
+
+/*!
+    \internal
+    Create a new CMYK JasPer image.
+*/
+jas_image_t* Jpeg2000JasperReader::newCMYKImage(const int width,
+                                                const int height, bool alpha)
+{
+    Q_UNUSED(alpha)
+    jasNumComponents = 4;
+    jas_image_cmptparm_t *params = new jas_image_cmptparm_t[jasNumComponents];
+    jas_image_cmptparm_t param = createComponentMetadata(width, height);
+    for (int c=0; c < jasNumComponents; c++)
+        params[c] = param;
+    jas_image_t *newImage = jas_image_create(jasNumComponents, params,
+                                             JAS_CLRSPC_GENCMYK);
+
+    if (!newImage) {
+        delete[] params;
+        return 0;
+    }
+
+    jas_image_setcmpttype(newImage, 0, 0);
+    jas_image_setcmpttype(newImage, 1, 1);
+    jas_image_setcmpttype(newImage, 2, 2);
+    jas_image_setcmpttype(newImage, 3, 3);
+
     delete[] params;
     return newImage;
 }
