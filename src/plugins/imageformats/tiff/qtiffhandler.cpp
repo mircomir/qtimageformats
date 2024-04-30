@@ -21,6 +21,9 @@ extern "C" {
 
 QT_BEGIN_NAMESPACE
 
+#define SUBTYPE_TIFF QByteArray("tiff")
+#define SUBTYPE_BIGTIFF QByteArray("bigtiff")
+
 static Q_LOGGING_CATEGORY(lcTiff, "qt.imageformats.tiff")
 
 tsize_t qtiffReadProc(thandle_t fd, tdata_t buf, tsize_t size)
@@ -121,6 +124,7 @@ public:
     bool headersRead;
     int currentDirectory;
     int directoryCount;
+    bool bigTiff;
 };
 
 static QImageIOHandler::Transformations exif2Qt(int exifOrientation)
@@ -181,6 +185,7 @@ QTiffHandlerPrivate::QTiffHandlerPrivate()
     , headersRead(false)
     , currentDirectory(0)
     , directoryCount(0)
+    , bigTiff(false)
 {
 }
 
@@ -382,6 +387,11 @@ bool QTiffHandlerPrivate::readHeaders(QIODevice *device)
             else
                 format = QImage::Format_ARGB32;
         }
+    }
+
+    // subtype
+    if (tiff) {
+        bigTiff = TIFFIsBigTIFF(tiff) ? true : false;
     }
 
     headersRead = true;
@@ -649,11 +659,7 @@ bool QTiffHandler::write(const QImage &image)
     if (!device()->isWritable())
         return false;
 
-    QString mode("wB");
-    if (image.sizeInBytes() > 4000000000)
-        mode = QStringLiteral("w8");
-
-    TIFF *const tiff = d->openInternal(mode.toLatin1().constData(), device());
+    TIFF *const tiff = d->openInternal(d->bigTiff ? "w8" : "wB", device());
     if (!tiff)
         return false;
 
@@ -987,6 +993,11 @@ QVariant QTiffHandler::option(ImageOption option) const
     } else if (option == ImageTransformation) {
         if (d->readHeaders(device()))
             return int(d->transformation);
+    } else if (option == SubType) {
+        d->readHeaders(device()); // if it fails I use the saved data (I also need it for writing)
+        return QVariant(d->bigTiff ? SUBTYPE_BIGTIFF : SUBTYPE_TIFF);
+    } else if (option == SupportedSubTypes) {
+        return QVariant::fromValue(QList<QByteArray>() << SUBTYPE_TIFF << SUBTYPE_BIGTIFF);
     }
     return QVariant();
 }
@@ -1000,6 +1011,9 @@ void QTiffHandler::setOption(ImageOption option, const QVariant &value)
         if (transformation > 0 && transformation < 8)
             d->transformation = QImageIOHandler::Transformations(transformation);
     }
+    if (option == SubType) {
+        d->bigTiff = value.toByteArray() == SUBTYPE_BIGTIFF;
+    }
 }
 
 bool QTiffHandler::supportsOption(ImageOption option) const
@@ -1007,7 +1021,9 @@ bool QTiffHandler::supportsOption(ImageOption option) const
     return option == CompressionRatio
             || option == Size
             || option == ImageFormat
-            || option == ImageTransformation;
+            || option == ImageTransformation
+            || option == SubType
+            || option == SupportedSubTypes;
 }
 
 bool QTiffHandler::jumpToNextImage()
