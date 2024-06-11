@@ -502,6 +502,8 @@ static QImage readDXT(QDataStream &s, quint32 width, quint32 height)
             s >> c0;
             s >> c1;
             s >> table;
+            if (s.status() != QDataStream::Ok)
+                return QImage();
 
             QRgb arr[16];
 
@@ -568,6 +570,8 @@ static QImage readATI2(QDataStream &s, quint32 width, quint32 height)
             quint64 alpha2;
             s >> alpha1;
             s >> alpha2;
+            if (s.status() != QDataStream::Ok)
+                return QImage();
 
             QRgb arr[16];
             memset(arr, 0, sizeof(QRgb) * 16);
@@ -649,6 +653,9 @@ static QImage readUnsignedImage(QDataStream &s, const DDSHeader &dds, quint32 wi
                 line[x] = yuv2rgb(colors[Red], colors[Green], colors[Blue]);
             else
                 line[x] = qRgba(colors[Red], colors[Green], colors[Blue], colors[Alpha]);
+
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -694,6 +701,8 @@ static QImage readR16F(QDataStream &s, const quint32 width, const quint32 height
         for (quint32 x = 0; x < width; x++) {
             quint8 r = readFloat16(s) * 255;
             line[x] = qRgba(r, 0, 0, 0);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -713,6 +722,8 @@ static QImage readRG16F(QDataStream &s, const quint32 width, const quint32 heigh
             quint8 r = readFloat16(s) * 255;
             quint8 g = readFloat16(s) * 255;
             line[x] = qRgba(r, g, 0, 0);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -734,6 +745,8 @@ static QImage readARGB16F(QDataStream &s, const quint32 width, const quint32 hei
                 colors[c] = readFloat16(s) * 255;
 
             line[x] = qRgba(colors[Red], colors[Green], colors[Blue], colors[Alpha]);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -752,6 +765,8 @@ static QImage readR32F(QDataStream &s, const quint32 width, const quint32 height
         for (quint32 x = 0; x < width; x++) {
             quint8 r = readFloat32(s) * 255;
             line[x] = qRgba(r, 0, 0, 0);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -771,6 +786,8 @@ static QImage readRG32F(QDataStream &s, const quint32 width, const quint32 heigh
             quint8 r = readFloat32(s) * 255;
             quint8 g = readFloat32(s) * 255;
             line[x] = qRgba(r, g, 0, 0);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -791,6 +808,8 @@ static QImage readARGB32F(QDataStream &s, const quint32 width, const quint32 hei
             for (int c = 0; c < ColorCount; ++c)
                 colors[c] = readFloat32(s) * 255;
             line[x] = qRgba(colors[Red], colors[Green], colors[Blue], colors[Alpha]);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -814,6 +833,8 @@ static QImage readQ16W16V16U16(QDataStream &s, const quint32 width, const quint3
                 colors[i] = (tmp + 0x7FFF) >> 8;
             }
             line[x] = qRgba(colors[Red], colors[Green], colors[Blue], colors[Alpha]);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -838,6 +859,9 @@ static QImage readCxV8U8(QDataStream &s, const quint32 width, const quint32 heig
             const quint8 c = getNormalZ(vn, un);
 
             line[x] = qRgb(vn, un, c);
+
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -861,6 +885,8 @@ static QImage readPalette8Image(QDataStream &s, quint32 width, quint32 height)
             quint8 index;
             s >> index;
             image.setPixel(x, y, index);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -885,10 +911,14 @@ static QImage readPalette4Image(QDataStream &s, quint32 width, quint32 height)
             s >> index;
             image.setPixel(x++, y, (index & 0x0f) >> 0);
             image.setPixel(x++, y, (index & 0xf0) >> 4);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
         if (width % 2 == 1) {
             s >> index;
             image.setPixel(width - 1, y, (index & 0x0f) >> 0);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -912,6 +942,8 @@ static QImage readARGB16(QDataStream &s, quint32 width, quint32 height)
                 colors[i] = quint8(color >> 8);
             }
             line[x] = qRgba(colors[Red], colors[Green], colors[Blue], colors[Alpha]);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -931,6 +963,8 @@ static QImage readV8U8(QDataStream &s, quint32 width, quint32 height)
             qint8 v, u;
             s >> v >> u;
             line[x] = qRgb(v + 128, u + 128, 255);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -953,6 +987,8 @@ static QImage readL6V5U5(QDataStream &s, quint32 width, quint32 height)
             quint8 g = qint8((tmp & 0x03e0) >> 5) * 0xff/0x1f + 128;
             quint8 b = quint8((tmp & 0xfc00) >> 10) * 0xff/0x3f;
             line[x] = qRgba(r, g, 0xff, b);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
     return image;
@@ -972,6 +1008,8 @@ static QImage readX8L8V8U8(QDataStream &s, quint32 width, quint32 height)
         for (quint32 x = 0; x < width; x++) {
             s >> v >> u >> a >> l;
             line[x] = qRgba(v + 128, u + 128, 255, a);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -995,6 +1033,8 @@ static QImage readQ8W8V8U8(QDataStream &s, quint32 width, quint32 height)
                 colors[i] = tmp + 128;
             }
             line[x] = qRgba(colors[Red], colors[Green], colors[Blue], colors[Alpha]);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -1016,6 +1056,8 @@ static QImage readV16U16(QDataStream &s, quint32 width, quint32 height)
             v = (v + 0x8000) >> 8;
             u = (u + 0x8000) >> 8;
             line[x] = qRgb(v, u, 255);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -1041,6 +1083,8 @@ static QImage readA2W10V10U10(QDataStream &s, quint32 width, quint32 height)
             // dunno why we should swap b and r here
             std::swap(b, r);
             line[x] = qRgba(r, g, b, a);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -1061,10 +1105,14 @@ static QImage readUYVY(QDataStream &s, quint32 width, quint32 height)
             s >> uyvy[0] >> uyvy[1] >> uyvy[2] >> uyvy[3];
             line[x++] = yuv2rgb(uyvy[1], uyvy[0], uyvy[2]);
             line[x++] = yuv2rgb(uyvy[3], uyvy[0], uyvy[2]);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
         if (width % 2 == 1) {
             s >> uyvy[0] >> uyvy[1] >> uyvy[2] >> uyvy[3];
             line[width - 1] = yuv2rgb(uyvy[1], uyvy[0], uyvy[2]);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -1085,10 +1133,14 @@ static QImage readR8G8B8G8(QDataStream &s, quint32 width, quint32 height)
             s >> rgbg[1] >> rgbg[0] >> rgbg[3] >> rgbg[2];
             line[x++] = qRgb(rgbg[0], rgbg[1], rgbg[2]);
             line[x++] = qRgb(rgbg[0], rgbg[3], rgbg[2]);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
         if (width % 2 == 1) {
             s >> rgbg[1] >> rgbg[0] >> rgbg[3] >> rgbg[2];
             line[width - 1] = qRgb(rgbg[0], rgbg[1], rgbg[2]);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -1109,10 +1161,14 @@ static QImage readYUY2(QDataStream &s, quint32 width, quint32 height)
             s >> yuyv[0] >> yuyv[1] >> yuyv[2] >> yuyv[3];
             line[x++] = yuv2rgb(yuyv[0], yuyv[1], yuyv[3]);
             line[x++] = yuv2rgb(yuyv[2], yuyv[1], yuyv[3]);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
         if (width % 2 == 1) {
             s >> yuyv[0] >> yuyv[1] >> yuyv[2] >> yuyv[3];
             line[width - 1] = yuv2rgb(yuyv[2], yuyv[1], yuyv[3]);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -1133,10 +1189,14 @@ static QImage readG8R8G8B8(QDataStream &s, quint32 width, quint32 height)
             s >> grgb[1] >> grgb[0] >> grgb[3] >> grgb[2];
             line[x++] = qRgb(grgb[1], grgb[0], grgb[3]);
             line[x++] = qRgb(grgb[1], grgb[2], grgb[3]);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
         if (width % 2 == 1) {
             s >> grgb[1] >> grgb[0] >> grgb[3] >> grgb[2];
             line[width - 1] = qRgb(grgb[1], grgb[0], grgb[3]);
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
 
@@ -1146,11 +1206,16 @@ static QImage readG8R8G8B8(QDataStream &s, quint32 width, quint32 height)
 static QImage readA2R10G10B10(QDataStream &s, const DDSHeader &dds, quint32 width, quint32 height)
 {
     QImage image = readUnsignedImage(s, dds, width, height, true);
+    if (image.isNull()) {
+        return image;
+    }
     for (quint32 y = 0; y < height; y++) {
         QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
         for (quint32 x = 0; x < width; x++) {
             QRgb pixel = image.pixel(x, y);
             line[x] = qRgba(qBlue(pixel), qGreen(pixel), qRed(pixel), qAlpha(pixel));
+            if (s.status() != QDataStream::Ok)
+                return QImage();
         }
     }
     return image;
