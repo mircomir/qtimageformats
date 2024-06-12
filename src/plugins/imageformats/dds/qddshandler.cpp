@@ -1461,6 +1461,8 @@ static QImage readCubeMap(QDataStream &s, const DDSHeader &dds, const int fmt)
             continue; // Skip face.
 
         const QImage face = readLayer(s, dds, fmt, dds.width, dds.height);
+        if (face.isNull())
+            continue;
 
         // Compute face offsets.
         int offset_x = faceOffsets[i].x * dds.width;
