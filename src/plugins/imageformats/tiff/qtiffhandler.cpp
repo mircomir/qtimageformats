@@ -24,7 +24,7 @@ QT_BEGIN_NAMESPACE
 #define SUBTYPE_TIFF QByteArray("tiff")
 #define SUBTYPE_BIGTIFF QByteArray("bigtiff")
 
-static Q_LOGGING_CATEGORY(lcTiff, "qt.imageformats.tiff")
+Q_STATIC_LOGGING_CATEGORY(lcTiff, "qt.imageformats.tiff")
 
 tsize_t qtiffReadProc(thandle_t fd, tdata_t buf, tsize_t size)
 {
