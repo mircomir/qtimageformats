@@ -839,7 +839,6 @@ bool Jpeg2000JasperReader::write(const QImage &image, int quality)
         return false;
 
     qtImage = image;
-    qDebug() << qtImage.format();
 
     // MMIR patch
     if (qtImage.format() == QImage::Format_Mono ||
@@ -924,7 +923,11 @@ bool Jpeg2000JasperReader::write(const QImage &image, int quality)
         fmtid = jas_image_strtofmt(const_cast<char*>("jpc"));
 
 #if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
-    if (jas_image_setcmprof(jasper_image, qColorSpaceToJasperProf(qtImage.colorSpace()))) {
+    auto qtcs = qtImage.colorSpace();
+    if (qtcs.primaries() == QColorSpace::Primaries::SRgb && qtcs.transferFunction() == QColorSpace::TransferFunction::SRgb && qtDepth >= 24) {
+        jas_image_setclrspc(jasper_image, JAS_CLRSPC_SRGB);
+    }
+    else if (jas_image_setcmprof(jasper_image, qColorSpaceToJasperProf(qtcs))) {
         switch (jas_clrspc_fam(jas_image_clrspc(jasper_image))) {
         case JAS_CLRSPC_FAM_RGB:
             jas_image_setclrspc(jasper_image, JAS_CLRSPC_GENRGB);
@@ -940,9 +943,10 @@ bool Jpeg2000JasperReader::write(const QImage &image, int quality)
         default:
             break;
         }
+        if (qtcs.isValid() && jas_image_cmprof(jasper_image) == nullptr) {
+            qDebug() << "Error when converting QColorSpace";
+        }
     }
-    if (qtImage.colorSpace().isValid() && jas_image_cmprof(jasper_image) == nullptr)
-        qDebug() << "Error when converting QColorSpace";
 #endif // !Qt 5.14
 
     const int minQuality = 0;
