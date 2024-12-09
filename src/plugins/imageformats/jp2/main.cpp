@@ -28,6 +28,8 @@ QImageIOPlugin::Capabilities QJp2Plugin::capabilities(QIODevice *device, const Q
 {
     if (format == "jp2" || format == "j2k")
         return Capabilities(CanRead | CanWrite);
+    if (format == "jpf" || format == "jpx")
+        return Capabilities(CanRead);
     Capabilities cap;
     if (!format.isEmpty())
         return cap;
